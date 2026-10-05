@@ -1,17 +1,25 @@
 services:
   nestjs-api:
-    build: 
+    build:
       context: .
       dockerfile: Dockerfile.dev
     ports:
       - 3000:3000
     volumes:
       - .:/home/node/app
+    env_file:
+      - .env
     depends_on:
       db:
         condition: service_healthy
       mailpit:
         condition: service_started
+      redis:
+        condition: service_healthy
+      minio:
+        condition: service_healthy
+      createbuckets:
+        condition: service_completed_successfully
 
   db:
     image: postgres:17
@@ -33,4 +41,78 @@ services:
       - "1025:1025"
       - "8025:8025"
 
+  redis:
+    image: redis:7-alpine
+    ports:
+      - "6379:6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+
+  minio:
+    # minio/minio was removed from Docker Hub; cleanstart/minio is a hardened
+    # community rebuild of the official MinIO binary (see library-refs.md).
+    image: cleanstart/minio:latest
+    command: server /data --console-address ":9001"
+    ports:
+      - "9000:9000"
+      - "9001:9001"
+    environment:
+      - MINIO_ROOT_USER=${MINIO_ACCESS_KEY}
+      - MINIO_ROOT_PASSWORD=${MINIO_SECRET_KEY}
+    # cleanstart/minio runs as uid 65532; use a tmpfs so Docker does not
+    # pre-create the volume as root (dev-only — data is ephemeral).
+    tmpfs:
+      - /data:uid=65532,gid=65532
+    healthcheck:
+      test:
+        [
+          "CMD-SHELL",
+          "wget -q -O- http://localhost:9000/minio/health/live || exit 1",
+        ]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  createbuckets:
+    # minio/mc was removed from Docker Hub; pgsty/mc is a community-maintained
+    # fork of the official MinIO client (see library-refs.md).
+    image: pgsty/mc:latest
+    depends_on:
+      minio:
+        condition: service_healthy
+    environment:
+      - MINIO_ACCESS_KEY=${MINIO_ACCESS_KEY}
+      - MINIO_SECRET_KEY=${MINIO_SECRET_KEY}
+      - BUCKET_VIDEOS_RAW=${BUCKET_VIDEOS_RAW}
+      - BUCKET_VIDEOS_PROCESSED=${BUCKET_VIDEOS_PROCESSED}
+      - BUCKET_THUMBNAILS=${BUCKET_THUMBNAILS}
+    entrypoint:
+      - sh
+      - -c
+      - |
+        set -eu
+        mc alias set local http://minio:9000 "$$MINIO_ACCESS_KEY" "$$MINIO_SECRET_KEY"
+        mc mb --ignore-existing local/"$$BUCKET_VIDEOS_RAW" local/"$$BUCKET_VIDEOS_PROCESSED" local/"$$BUCKET_THUMBNAILS"
+        echo "buckets ready"
+
+  video-worker:
+    build:
+      context: .
+      dockerfile: video-worker/Dockerfile.dev
+    volumes:
+      - .:/home/node/app
+    env_file:
+      - .env
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      minio:
+        condition: service_healthy
+      createbuckets:
+        condition: service_completed_successfully
 

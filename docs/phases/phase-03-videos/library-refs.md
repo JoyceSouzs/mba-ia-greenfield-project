@@ -32,7 +32,8 @@ Libraries newly adopted by Phase 03 and their official docs / caveats. Versions 
 ### `ioredis`
 
 - **Latest:** `6.0.0`
-- **Pin:** `^6.0.0` (BullMQ 6 supports ioredis 5 and 6; use 6 for the latest fixes)
+- **Pin:** `^5.11.1` (installed version: `5.11.1`).
+- **Peer-dep constraint:** `typeorm@0.3.28` declares `peerOptional ioredis@^5.0.4`. Installing `ioredis@^6` fails `npm install` with `ERESOLVE`. BullMQ 6 is compatible with both ioredis 5 and 6, so pinning to `^5` is the correct resolution — it satisfies both TypeORM and BullMQ without `--legacy-peer-deps` hacks.
 - **Role:** Redis client used by BullMQ under the hood. Configure once per app (`host`, `port`, `maxRetriesPerRequest: null` — required by BullMQ).
 - **Docs:** https://github.com/redis/ioredis
 
@@ -173,7 +174,7 @@ VIDEO_PROCESSING_BACKOFF_MS=10000
 |--------------------------------|-------------------|
 | `@nestjs/bullmq`               | `^12.0.0`         |
 | `bullmq`                       | `^6.3.0`          |
-| `ioredis`                      | `^6.0.0`          |
+| `ioredis`                      | `^5.11.1` (peer constraint from typeorm; see TD-01 note) |
 | `@aws-sdk/client-s3`           | `^3.900.0`        |
 | `@aws-sdk/s3-request-presigner`| `^3.900.0`        |
 | `fluent-ffmpeg`                | `^2.1.3`          |

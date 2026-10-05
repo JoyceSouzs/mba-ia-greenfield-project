@@ -44,7 +44,7 @@ sources_mtime:
 
 | Ref | Source | Scope | Topic | Status | Decision | Libraries |
 |-----|--------|-------|-------|--------|----------|-----------|
-| phase-03-videos/TD-01 | technical-decisions-phase-03-videos.md | Backend / Cross-layer | Message queue technology | decided | A (BullMQ + Redis) | @nestjs/bullmq@^11.x, bullmq@^5.x, ioredis@^5.x |
+| phase-03-videos/TD-01 | technical-decisions-phase-03-videos.md | Backend / Cross-layer | Message queue technology | decided | A (BullMQ + Redis) | @nestjs/bullmq@^12.0.0, bullmq@^6.3.0, ioredis@^5.11.1 |
 | phase-03-videos/TD-02 | technical-decisions-phase-03-videos.md | Backend / Cross-layer | 10GB upload strategy | decided | A (S3 Multipart Presigned) | @aws-sdk/client-s3@^3.x, @aws-sdk/s3-request-presigner@^3.x |
 | phase-03-videos/TD-03 | technical-decisions-phase-03-videos.md | Backend / Operations | Object storage layout (buckets, keys) | decided | B (three buckets: `videos-raw`, `videos-processed`, `thumbnails`) | — |
 | phase-03-videos/TD-04 | technical-decisions-phase-03-videos.md | Backend / Operations | Worker topology | decided | A (Dedicated `video-worker` container) | — |

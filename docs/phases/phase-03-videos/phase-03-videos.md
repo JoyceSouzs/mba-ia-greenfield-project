@@ -24,7 +24,7 @@ Deliver the complete video ingestion and playback foundation — object storage,
 
 **Technical actions:**
 
-- Install production dependencies in `nestjs-project`: `@nestjs/bullmq@^12.0.0`, `bullmq@^6.3.0`, `ioredis@^6.0.0`, `@aws-sdk/client-s3@^3.900.0`, `@aws-sdk/s3-request-presigner@^3.900.0`, `fluent-ffmpeg@^2.1.3`, `nanoid@^5.1.16` (dynamic import — see library-refs.md TD-07 note).
+- Install production dependencies in `nestjs-project`: `@nestjs/bullmq@^12.0.0`, `bullmq@^6.3.0`, `ioredis@^5.11.1` (pinned to 5.x to satisfy `typeorm@0.3.28`'s `peerOptional ioredis@^5` — BullMQ 6 is compatible with both 5 and 6), `@aws-sdk/client-s3@^3.900.0`, `@aws-sdk/s3-request-presigner@^3.900.0`, `fluent-ffmpeg@^2.1.3`, `nanoid@^5.1.16` (dynamic import — see library-refs.md TD-07 note).
 - Install dev dependencies: `@types/fluent-ffmpeg@^2.1.0`.
 - Create `src/config/storage.config.ts` — `registerAs('storage', ...)` reading `MINIO_ENDPOINT` (string, required), `MINIO_REGION` (string, default `'us-east-1'`), `MINIO_ACCESS_KEY` (string, required), `MINIO_SECRET_KEY` (string, required), `BUCKET_VIDEOS_RAW` (string, default `'videos-raw'`), `BUCKET_VIDEOS_PROCESSED` (string, default `'videos-processed'`), `BUCKET_THUMBNAILS` (string, default `'thumbnails'`), `PRESIGN_STREAM_TTL_SECONDS` (number, default `900`), `PRESIGN_DOWNLOAD_TTL_SECONDS` (number, default `3600`).
 - Create `src/config/queue.config.ts` — `registerAs('queue', ...)` reading `REDIS_HOST` (string, default `'redis'`), `REDIS_PORT` (number, default `6379`), `VIDEO_PROCESSING_QUEUE` (string, default `'video-processing'`), `VIDEO_PROCESSING_ATTEMPTS` (number, default `3`), `VIDEO_PROCESSING_BACKOFF_MS` (number, default `10000`).
