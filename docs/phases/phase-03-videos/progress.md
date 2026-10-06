@@ -1,7 +1,7 @@
 # phase-03-videos — Progress
 
 **Status:** in_progress
-**SIs:** 4/8 completed
+**SIs:** 5/8 completed
 
 ---
 
@@ -82,11 +82,23 @@
 
 ## SI-03.5 — Videos API: Upload Lifecycle
 
-**Status:** pending
+**Status:** completed
 
-**Tests:** _not yet run_
+**Tests:**
+- `src/videos/videos.service.spec.ts` — 13 unit tests covering: `createVideo` (happy path + ChannelNotFound + NotChannelOwner + slug retry on unique violation), `requestPartUrls` (draft→uploading transition + skip when already uploading + VideoNotFound + NotChannelOwner + invalid status), `completeUpload` (success + rejects when status ≠ uploading), `abortUpload` (success + rejects when status ∈ processing/ready/failed).
+- `src/videos/videos.service.integration-spec.ts` — 2 end-to-end integration tests against real DB + MinIO + Redis: happy path (create → requestPartUrls → PUT 6MiB+tail to MinIO → complete → DB status=processing + job in Redis queue with correct payload) and abort path (create → abort → row removed).
+- `test/videos-upload.e2e-spec.ts` — 7 e2e via supertest: create as owner (201), as foreign user (403 NOT_CHANNEL_OWNER), missing title (400 VALIDATION_ERROR), requestPartUrls (owner 200, stranger 403), abort (204 then subsequent parts 404), premature complete (409 UPLOAD_ALREADY_COMPLETED), unauthenticated (401).
+- 22/22 new tests green across the SI.
 
-**Observations:** _none yet._
+**Observations:**
+- **nanoid pinned to `^3.3.20`** (CJS). Tried `nanoid@^5.1.16` ESM with `const { nanoid } = await import('nanoid');` inside the slug generator — ts-jest raises `A dynamic import callback was invoked without --experimental-vm-modules`, which would require flipping the entire test runner into ESM mode. Not worth the blast radius for a single import. Updated `library-refs.md` TD-07 note accordingly.
+- Added `transformIgnorePatterns` for `@nestjs/bullmq` to **both** jest configs (`package.json` and `test/jest-e2e.json`) — ESM-only package needs ts-jest to transform it.
+- Service surface: `createVideo`, `requestPartUrls`, `completeUpload`, `abortUpload`. All owner-scoped: `loadOwnedVideo` resolves the channel relation and throws `NotChannelOwnerException` when `channel.user_id !== req.user.id`.
+- Public slug uniqueness: insert-retry loop with PG error code `23505` + `detail` containing `public_slug` (same pattern as `channels.service.ts` nickname). 5 attempts cap; throws `SlugGenerationFailedException` if all collide (practically impossible at 64^11 entropy).
+- Status transitions: `draft → uploading` on first `POST /videos/:id/parts`; `uploading → processing` on `POST /videos/:id/complete`; abort deletes the DB row entirely (TD-08: aborted videos leave no trace per plan). `processing → ready|failed` is the worker's responsibility — SI-03.6.
+- Error catalog: `CHANNEL_NOT_FOUND (404)`, `NOT_CHANNEL_OWNER (403)`, `VIDEO_NOT_FOUND (404)`, `INVALID_STATUS_TRANSITION (409)`, `UPLOAD_ALREADY_COMPLETED (409)`, `SLUG_GENERATION_FAILED (500)`.
+- DTOs follow the project convention: class-validator decorators + Swagger annotations. `CompleteUploadDto` uses `@ValidateNested` + `@Type` for the parts array.
+- Controller: 4 endpoints, all with `@ApiBearerAuth()` + `@ApiOperation` + `@ApiResponse` per status. Uses `ParseUUIDPipe` for `channelId` and `videoId` params.
 
 ---
 

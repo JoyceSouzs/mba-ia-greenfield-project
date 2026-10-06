@@ -112,13 +112,13 @@ Libraries newly adopted by Phase 03 and their official docs / caveats. Versions 
 
 ### `nanoid` — module-system choice
 
-The latest `nanoid` versions are ESM-only; the backend tsconfig uses `"module": "nodenext"`, which supports ESM imports in TS source, **but** Jest with `ts-jest` defaults to CJS and would fail to load an ESM-only package without extra configuration. Two acceptable pins:
+The latest `nanoid` versions are ESM-only; the backend tsconfig uses `"module": "nodenext"`, which supports ESM imports in TS source, **but** Jest with `ts-jest` defaults to CJS and would fail to load an ESM-only package without extra configuration. Three candidate pins:
 
-- **Preferred: `nanoid@^5.1.16`** — ESM-only. Import at runtime via `const { nanoid } = await import('nanoid');` inside the slug generator function (not at module top-level) to avoid ts-jest transformation issues. Keeps the project on the latest, actively maintained line.
-- **Fallback: `nanoid@^3.3.20`** — Last CJS release, still receiving security patches. Direct `import { nanoid } from 'nanoid'` works in any context. Choose this if the dynamic-import approach surfaces unexpected ts-jest friction during SI-03.5 implementation.
+- **`nanoid@^5.1.16`** — ESM-only. Import at runtime via `const { nanoid } = await import('nanoid');` inside the slug generator function. **Attempted and reverted** during SI-03.5: ts-jest's VM runtime raises `A dynamic import callback was invoked without --experimental-vm-modules`, which would require turning on `--experimental-vm-modules` project-wide and would ripple through every spec. Not worth the blast radius for a single-use import.
+- **Chosen: `nanoid@^3.3.20`** — Last CJS release, still receiving security patches. Direct `import { nanoid } from 'nanoid'` works everywhere without flags. The slug generator stays synchronous. **This is the version actually installed.**
 - **Avoid: `nanoid@^6.0.0`** — Published Oct 2025, too fresh to pin for a graded deliverable; revisit later.
 
-**Decision point:** `plan-build` records `nanoid@^5.1.16` as the default pin, with the fallback documented inline in the SI that introduces the slug generator (SI-03.5 Technical Actions). The actual pin lands in `package.json` only when `/implement` reaches that SI.
+**Status:** installed `nanoid@^3.3.20`. If the project ever moves to ESM-wide, bump to `^5` and remove the sync wrapper.
 
 - **Docs:** https://github.com/ai/nanoid
 - **Alphabet rationale (11 chars × 64):** ~1.1×10⁻⁶ collision probability at 10M videos (`nanoid` collision calculator: https://zelark.github.io/nano-id-cc/). Combined with a unique DB index + insert-retry loop, collisions are impossible to persist.
@@ -179,4 +179,4 @@ VIDEO_PROCESSING_BACKOFF_MS=10000
 | `@aws-sdk/s3-request-presigner`| `^3.900.0`        |
 | `fluent-ffmpeg`                | `^2.1.3`          |
 | `@types/fluent-ffmpeg`         | `^2.1.0`          |
-| `nanoid`                       | `^5.1.16` (fallback `^3.3.20` — see TD-07 note) |
+| `nanoid`                       | `^3.3.20` (CJS line — see TD-07 note; `^5` reverted during SI-03.5) |
