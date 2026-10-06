@@ -1,7 +1,7 @@
 # phase-03-videos — Progress
 
 **Status:** in_progress
-**SIs:** 2/8 completed
+**SIs:** 3/8 completed
 
 ---
 
@@ -45,11 +45,19 @@
 
 ## SI-03.3 — Storage Module (`src/storage/`) — AWS SDK Wrapper for MinIO
 
-**Status:** pending
+**Status:** completed
 
-**Tests:** _not yet run_
+**Tests:**
+- `src/storage/storage.service.spec.ts` — 13 unit tests with `aws-sdk-client-mock`: `createMultipartUpload` (happy path, missing UploadId error, default contentType), `signUploadPartUrls` (one URL per partNumber, encodes partNumber+uploadId), `completeMultipartUpload` (parts mapping to {ETag,PartNumber}), `abortMultipartUpload`, `signGetObjectUrl` (TTL + response-content-disposition), `headObject` (contentLength+contentType, defaults), `putObject`, `onModuleDestroy`.
+- `src/storage/storage.service.integration-spec.ts` — 4 integration tests against the real MinIO service: full multipart upload end-to-end (6MiB + 1KiB parts, complete, head verifies size), signed GET URL returning 206 Partial Content for a Range request, aborted multipart cleanly fails to complete, put+head round-trip for a thumbnail.
+- 17/17 green.
 
-**Observations:** _none yet._
+**Observations:**
+- Installed dev dep `aws-sdk-client-mock@^4` for unit tests (keeps the SDK untouched while asserting command inputs/outputs).
+- The 10MiB payload in the Range test is reused as the single-part multipart (above 5MiB minimum per S3 spec).
+- `fetch` body typing: Node's fetch rejects a `Buffer` directly (not in `BodyInit`); converted with `new Uint8Array(buf)` at the boundary. Documented in-line for the next SI.
+- Integration tests use `BUCKET_VIDEOS_RAW` from env (defaults to `videos-raw`) and `BUCKET_THUMBNAILS` likewise, so they align with Compose bootstrap.
+- Validates TD-06 one SI early: the 206 Partial Content from a presigned GET URL + Range header is now proven to work against real MinIO.
 
 ---
 
