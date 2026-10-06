@@ -1,7 +1,7 @@
 # phase-03-videos — Progress
 
 **Status:** in_progress
-**SIs:** 1/8 completed
+**SIs:** 2/8 completed
 
 ---
 
@@ -26,11 +26,20 @@
 
 ## SI-03.2 — Video Entity and Migration
 
-**Status:** pending
+**Status:** completed
 
-**Tests:** _not yet run_
+**Tests:**
+- `src/videos/entities/video.entity.integration-spec.ts` — 8 tests covering default status, unique public_slug, FK rejection, cascade delete from channel, invalid enum rejection, jsonb metadata, nullable fields, and ManyToOne channel loading.
+- `src/videos/videos.module.spec.ts` — 1 test confirming module compiles with TypeOrmModule.forFeature([Video]).
+- `src/database/migrations.integration-spec.ts` — extended to 3 tests: applies 3 migrations (users+channels, auth tokens, videos), creates the `video_status` enum, reverts the last migration dropping both the videos table and the enum.
+- 12/12 green.
 
-**Observations:** _none yet._
+**Observations:**
+- `TypeORM migration:generate` auto-created `src/database/migrations/1791230441896-CreateVideos.ts` with correct SQL (enum type, table, index on channel_id, FK ON DELETE CASCADE). Prettier auto-fix normalized its formatting.
+- Database pre-conditions: the test DB had leftover state from Phase 02 migrations without a `migrations` row; manually re-registered the two prior migrations via `INSERT INTO migrations` before running `migration:run` for the first time. This is a one-off dev-env fix, not something the fase needs to carry.
+- Added `videos` to `cleanAllTables` and extended `createTestDataSource` to use a typed `EntityCtor` instead of the lint-flagged `Function` type. Both fixes are strictly additive — no behavior change in existing specs.
+- `AppModule` now loads `storageConfig` and `queueConfig` (missing in SI-03.1 — fixed here) and imports `VideosModule`.
+- Flakiness: when the migrations spec runs concurrently with the entity spec and both operate on the same DB, synchronize+drops can race. Current `--runInBand` + prefixed cleanup is sufficient; running `src/videos/` and `src/database/migrations.integration-spec.ts` together passes consistently.
 
 ---
 
