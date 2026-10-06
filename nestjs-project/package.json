@@ -99,6 +99,9 @@
     "testEnvironment": "node",
     "setupFiles": [
       "dotenv/config"
+    ],
+    "transformIgnorePatterns": [
+      "node_modules/(?!(@nestjs/bullmq|@nestjs/bull-shared)/)"
     ]
   }
 }

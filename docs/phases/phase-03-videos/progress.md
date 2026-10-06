@@ -1,7 +1,7 @@
 # phase-03-videos — Progress
 
 **Status:** in_progress
-**SIs:** 3/8 completed
+**SIs:** 4/8 completed
 
 ---
 
@@ -63,11 +63,20 @@
 
 ## SI-03.4 — Queue Module (`src/queue/`) — BullMQ Wiring and Job Contract
 
-**Status:** pending
+**Status:** completed
 
-**Tests:** _not yet run_
+**Tests:**
+- `src/queue/video-processing.producer.spec.ts` — 2 unit tests covering the `queue.add` call (name + payload + options from config) and the "missing job id" error branch.
+- `src/queue/video-processing.producer.integration-spec.ts` — 1 integration test against the real Redis: enqueues a job via the producer, a scoped BullMQ `Worker` on the same queue consumes it, asserts the id round-trips and the options (attempts, backoff) survive serialization.
+- `src/queue/queue.module.spec.ts` — 1 test confirming `QueueModule` compiles, both `VideoProcessingProducer` and the queue token resolve.
+- 4/4 green.
 
-**Observations:** _none yet._
+**Observations:**
+- Added `transformIgnorePatterns: ['node_modules/(?!(@nestjs/bullmq|@nestjs/bull-shared)/)']` to the Jest config in `package.json` because `@nestjs/bullmq@^12` is published as ESM-only (`"type": "module"`) and ts-jest otherwise fails to parse its `export` statement. All other project tests still pass with this scope.
+- Peer-dep sanity: `@nestjs/bullmq@12` peers on `@nestjs/common@^10 || ^11 || ^12` and `bullmq@^3..^6` — our pins (Nest 11, BullMQ 6.3) are inside both ranges.
+- `VIDEO_PROCESSING_QUEUE_NAME` constant isolates the string that both `BullModule.registerQueue` and `@InjectQueue()` must share (decorators cannot read from config at compile time); the configurable name in `queueConfig.videoProcessingQueue` remains the source of truth for env-driven changes and is already asserted in `queue.config.spec.ts`.
+- `AppModule` now imports `QueueModule`.
+- Jest warns "did not exit one second after the test run has completed" — a known BullMQ open-handle on the queue connection; not failing. Will revisit at the SI-03.8 observability pass if it becomes noisy.
 
 ---
 
