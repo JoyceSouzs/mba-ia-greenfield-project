@@ -1,4 +1,4 @@
-import { Inject, Injectable } from '@nestjs/common';
+import { Inject, Injectable, Logger } from '@nestjs/common';
 import type { ConfigType } from '@nestjs/config';
 import { InjectRepository } from '@nestjs/typeorm';
 import { QueryFailedError, Repository } from 'typeorm';
@@ -67,6 +67,8 @@ export interface AbortUploadInput {
 
 @Injectable()
 export class VideosService {
+  private readonly logger = new Logger(VideosService.name);
+
   constructor(
     @InjectRepository(Video) private readonly videoRepo: Repository<Video>,
     @InjectRepository(Channel)
@@ -104,6 +106,9 @@ export class VideosService {
       uploadId,
     });
 
+    this.logger.log(
+      `Created draft video=${videoId} slug=${publicSlug} channel=${input.channelId}`,
+    );
     return { videoId, publicSlug, uploadId, rawObjectKey, bucket };
   }
 
@@ -156,6 +161,9 @@ export class VideosService {
       channelId: video.channel_id,
       rawObjectKey: video.raw_object_key,
     });
+    this.logger.log(
+      `Completed upload for video=${video.id}, transitioned to processing`,
+    );
   }
 
   async abortUpload(input: AbortUploadInput): Promise<void> {
@@ -173,6 +181,7 @@ export class VideosService {
     }
 
     await this.videoRepo.delete({ id: video.id });
+    this.logger.log(`Aborted video=${video.id}, draft removed`);
   }
 
   private async loadOwnedVideo(

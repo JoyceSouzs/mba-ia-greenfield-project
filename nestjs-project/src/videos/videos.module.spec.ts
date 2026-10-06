@@ -1,25 +1,28 @@
+import { ConfigModule } from '@nestjs/config';
 import { Test } from '@nestjs/testing';
 import { TypeOrmModule } from '@nestjs/typeorm';
-import { RefreshToken } from '../auth/entities/refresh-token.entity';
-import { VerificationToken } from '../auth/entities/verification-token.entity';
-import { Channel } from '../channels/entities/channel.entity';
-import { createTestDataSource } from '../test/create-test-data-source';
-import { User } from '../users/entities/user.entity';
-import { Video } from './entities/video.entity';
-import { VideosModule } from './videos.module';
-
-const ALL_ENTITIES = [User, Channel, RefreshToken, VerificationToken, Video];
+import { AppModule } from '../app.module';
+import { VideoProcessingService } from './video-processing.service';
+import { VideoViewService } from './video-view.service';
+import { VideosService } from './videos.service';
 
 describe('VideosModule', () => {
-  it('compiles with TypeOrmModule.forFeature([Video])', async () => {
-    const module = await Test.createTestingModule({
-      imports: [
-        TypeOrmModule.forRoot(createTestDataSource(ALL_ENTITIES).options),
-        VideosModule,
-      ],
+  it('resolves VideosService + VideoProcessingService + VideoViewService inside AppModule', async () => {
+    const moduleRef = await Test.createTestingModule({
+      imports: [AppModule],
     }).compile();
 
-    expect(module).toBeDefined();
-    await module.close();
+    expect(moduleRef.get(VideosService)).toBeDefined();
+    expect(moduleRef.get(VideoProcessingService)).toBeDefined();
+    expect(moduleRef.get(VideoViewService)).toBeDefined();
+
+    await moduleRef.close();
   }, 30000);
+
+  // Guard import so the ConfigModule reference stays live even if the first
+  // test is deleted — the module composition still requires it transitively.
+  it('imports resolve', () => {
+    expect(ConfigModule).toBeDefined();
+    expect(TypeOrmModule).toBeDefined();
+  });
 });

@@ -1,7 +1,7 @@
 # phase-03-videos — Progress
 
-**Status:** in_progress
-**SIs:** 7/8 completed
+**Status:** completed
+**SIs:** 8/8 completed
 
 ---
 
@@ -145,8 +145,17 @@
 
 ## SI-03.8 — Observability, OpenAPI Export, and Documentation
 
-**Status:** pending
+**Status:** completed
 
-**Tests:** _not yet run_
+**Tests:**
+- Full backend sweep (`src/queue/ src/videos/ src/storage/ src/config/`): 15 suites, 79 tests green.
+- Full e2e sweep: 5 suites, 64 tests green (incl. app health, auth lifecycle, swagger, videos upload, videos playback).
+- `npx tsc --noEmit`: exit 0.
+- `openapi.json` re-exported with 7 new Fase 03 paths (`/channels/{channelId}/videos`, `/videos/{videoId}/parts`, `/videos/{videoId}/complete`, `/videos/{videoId}/upload`, `/videos/{slug}`, `/videos/{slug}/stream`, `/videos/{slug}/download`).
 
-**Observations:** _none yet._
+**Observations:**
+- Structured `Logger` calls added in `VideoProcessingProducer` (enqueue event), `VideosService` (createVideo + completeUpload + abortUpload transitions), and `VideoProcessor` (already in place from SI-03.6: attempt log, success log, retry warning, terminal error).
+- `nestjs-project/CLAUDE.md`: new "Videos Module (Fase 03)" section covering Compose services, module map, status machine, endpoints, error catalog additions, events/messages schema, and testing notes (worker integration must run inside `video-worker` container because the API image lacks ffmpeg).
+- Root `CLAUDE.md`: Repository Structure now lists the new modules; Architecture section replaces the "TBD" message queue with the real stack (MinIO, Redis + BullMQ, Video Worker image).
+- Fixed cross-run isolation on `video-processing.producer.integration-spec.ts` via `queue.obliterate({ force: true })` in `beforeAll`/`beforeEach`/`afterAll` — prior runs could leave orphan jobs in Redis that polluted the "first job id" assertion.
+- Updated `videos.module.spec.ts` to boot the full `AppModule` (previously it tried to compile the standalone module without `AuthModule` dep).

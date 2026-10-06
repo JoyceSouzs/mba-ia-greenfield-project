@@ -10,21 +10,21 @@ More info in the project overview: [docs/project-plan.md](docs/project-plan.md)
 
 This is a monorepo with two main areas:
 
-- `nestjs-project/` — Backend API (NestJS 11, TypeScript, Express). Contains modules for users, channels, videos, comments, etc.
-- `docs/` — Project documentation, architecture diagrams, and planning.
+- `nestjs-project/` — Backend API (NestJS 11, TypeScript, Express). Contains modules for `auth/`, `users/`, `channels/`, `mail/`, `storage/` (S3-compatible wrapper), `queue/` (BullMQ wiring), `videos/`, and a sibling `video-worker/` process that runs FFmpeg against jobs produced by the API.
+- `docs/` — Project documentation, architecture diagrams, planning (see `docs/phases/` for per-phase plans) and technical decisions (`docs/decisions/`).
 - `next-frontend/` (Next.js) — not yet initialized
 
 ## Architecture (C4 Container Diagram)
 
 See `docs/diagrams/software-arch.mermaid` for the full diagram. Key containers:
 
-- **Frontend** (Next.js) → calls API via REST, streams from Object Storage
-- **API** (Nest.js) → business rules, auth, reads/writes DB, uploads to storage, publishes jobs to queue, sends emails
-- **Video Worker** (FFmpeg) → consumes jobs from queue, processes videos, updates DB and storage
-- **Database** (PostgreSQL) → users, channels, videos, comments, likes
-- **Object Storage** (S3/MinIO) → video files and thumbnails
-- **Message Queue** (TBD) → video processing job queue
-- **Email Service** (SMTP) → account confirmation and password recovery
+- **Frontend** (Next.js) → calls API via REST, streams from Object Storage. Not yet initialized.
+- **API** (Nest.js) → business rules, auth, reads/writes DB, mints presigned URLs against the Object Storage, publishes jobs to the Queue, sends emails. The 10GB upload goes directly from client to Object Storage via presigned multipart URLs — bytes never traverse the API.
+- **Video Worker** (dedicated container, `node:25.6.0-slim` + `ffmpeg`/`ffprobe`) → consumes `video.process` jobs from the Queue, downloads the raw asset from Object Storage, extracts duration/metadata with `ffprobe`, generates a thumbnail with `ffmpeg`, uploads the thumbnail, and updates the DB.
+- **Database** (PostgreSQL 17) → users, channels, videos (status machine `draft → uploading → processing → ready | failed`), auth tokens.
+- **Object Storage** (**MinIO** in dev — `cleanstart/minio:latest`; S3 in prod) → three buckets: `videos-raw` (originals), `videos-processed` (reserved for future transcodes), `thumbnails`.
+- **Message Queue** (**BullMQ + Redis 7**) → single queue `video-processing`. 3 attempts, exponential 10s backoff.
+- **Email Service** (SMTP; Mailpit in dev) → account confirmation and password recovery.
 
 ## Docker Networking
 

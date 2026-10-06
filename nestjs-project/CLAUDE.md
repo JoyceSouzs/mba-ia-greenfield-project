@@ -159,3 +159,69 @@ NestJS with standard module structure. Source lives in `src/`, compiled output i
 ## REST Conventions
 
 This is a RESTful API. All endpoints must follow standard REST conventions — correct HTTP methods, proper status codes, plural resource nouns, and consistent URL structure. Details are enforced via rules on controller files.
+
+## Videos Module (Fase 03)
+
+Backend for video upload, processing, and playback. Lives under `src/videos/` with sibling `src/storage/` and `src/queue/`, plus a dedicated `video-worker/` process. Decisions in `docs/phases/phase-03-videos/phase-03-videos.md` and `docs/decisions/technical-decisions-phase-03-videos.md`.
+
+### Infra services (Compose)
+
+- **`minio`** (`cleanstart/minio:latest`): S3-compatible object storage. API `9000`, console `9001`. `MINIO_ROOT_USER`/`MINIO_ROOT_PASSWORD` from env. Data lives on an in-memory tmpfs (dev-only; data is ephemeral).
+- **`createbuckets`** (`pgsty/mc:latest`): one-shot init that creates the three buckets (`videos-raw`, `videos-processed`, `thumbnails`) and exits. Depends on `minio` healthy.
+- **`redis`** (`redis:7-alpine`): BullMQ backend. Port `6379`.
+- **`video-worker`** (custom image, `node:25.6.0-slim` + `ffmpeg`/`ffprobe`): dedicated container that consumes the `video-processing` queue. Shares the project source via volume mount, like `nestjs-api`. Default command keeps the container alive; start the worker explicitly with `docker compose exec video-worker npx ts-node video-worker/src/main.ts`.
+
+### Modules
+
+- `src/videos/`: entities (Video + status enum), DTOs, domain exceptions, two controllers (`VideosController` for upload lifecycle, `VideosPlaybackController` for public playback/download), two services (`VideosService` for write ops, `VideoViewService` for read + visibility), a `VideoProcessingService` shared with the worker, and a `slug.generator.ts` using `nanoid@^3.3.20` (CJS — see `docs/phases/phase-03-videos/library-refs.md` TD-07).
+- `src/storage/`: `StorageService` is the only module that imports from `@aws-sdk/*`. Exposes a narrow typed API (`createMultipartUpload`, `signUploadPartUrls`, `completeMultipartUpload`, `abortMultipartUpload`, `signGetObjectUrl`, `headObject`, `putObject`).
+- `src/queue/`: `BullModule` wiring + `VideoProcessingProducer` (producer side only; the worker side is in `video-worker/`).
+- `video-worker/src/`: `WorkerModule` is a Nest standalone application loading the same ConfigModule/TypeORM/StorageModule/QueueModule as the API, plus the `VideoProcessor` provider. `main.ts` bootstraps `NestFactory.createApplicationContext`.
+
+### Status machine
+
+`draft → uploading → processing → ready | failed`
+
+- `draft`: created by `POST /channels/:channelId/videos` (multipart initiated, nothing uploaded yet).
+- `uploading`: first `POST /videos/:videoId/parts` flips the status.
+- `processing`: `POST /videos/:videoId/complete` finalizes multipart and enqueues `video.process`.
+- `ready` / `failed`: set by the worker. Terminal failure after `VIDEO_PROCESSING_ATTEMPTS` (default 3) with exponential backoff (default 10s).
+- `DELETE /videos/:videoId/upload` deletes the DB row entirely (only valid from `draft`/`uploading`).
+
+### Endpoints
+
+Owner-scoped (require JWT; caller must own the channel):
+
+- `POST /channels/:channelId/videos` → 201 `{ videoId, publicSlug, uploadId, rawObjectKey, bucket }`
+- `POST /videos/:videoId/parts` → 200 `{ parts: Array<{ partNumber, url, expiresAt }> }`
+- `POST /videos/:videoId/complete` → 204
+- `DELETE /videos/:videoId/upload` → 204
+
+Public (owner-only visibility for non-`ready`):
+
+- `GET /videos/:slug` → 200 `{ slug, title, status, durationSeconds, thumbnailUrl }`
+- `GET /videos/:slug/stream` → 307 redirect to presigned GET on MinIO (15 min TTL). The client's follow-up request honours HTTP Range and receives `206 Partial Content` directly from MinIO.
+- `GET /videos/:slug/download` → 307 redirect to presigned GET with `response-content-disposition=attachment; filename="…"` (1 h TTL).
+
+### Error catalog additions
+
+| Code | HTTP | Trigger |
+|------|------|---------|
+| CHANNEL_NOT_FOUND | 404 | Unknown channel on `POST /channels/:channelId/videos` |
+| NOT_CHANNEL_OWNER | 403 | Owner-scoped endpoint called by a non-owner |
+| VIDEO_NOT_FOUND | 404 | Unknown slug/id (also returned to anonymous callers for non-`ready` videos to hide status existence) |
+| VIDEO_NOT_READY | 404 | Stream/download for a non-`ready` video |
+| INVALID_STATUS_TRANSITION | 409 | Requesting parts or aborting a video whose status does not permit the operation |
+| UPLOAD_ALREADY_COMPLETED | 409 | `POST /videos/:videoId/complete` when status is not `uploading` |
+| SLUG_GENERATION_FAILED | 500 | nanoid collided after 5 insert-retries (astronomically unlikely) |
+
+### Events / Messages
+
+Queue `video-processing` carries one job name: `video.process` with payload `{ videoId, channelId, rawObjectKey }`. BullMQ options: `attempts: 3`, `backoff: exponential 10s`, `removeOnComplete: 100`, `removeOnFail: 1000`. The worker is idempotent on duplicate deliveries (refuses to process jobs whose row is not `processing`).
+
+### Testing
+
+- Unit specs for every service, DTO validation path, and SDK/BullMQ interaction (SDK mocked via `aws-sdk-client-mock`; `fluent-ffmpeg` mocked in the processor unit).
+- Integration specs against the real Compose infrastructure (PostgreSQL, MinIO, Redis). The worker's integration spec requires the real `ffmpeg`/`ffprobe` binaries and therefore must run inside `docker compose exec video-worker` — the API container intentionally lacks ffmpeg.
+- E2E specs via supertest for the owner-scoped upload lifecycle and the public playback/download endpoints (including follow-up of the 307 redirect to assert `206 Partial Content` and `Content-Disposition: attachment` from MinIO).
+- BullMQ keeps a Redis connection open after the suite; test commands that boot a BullMQ queue should pass `--forceExit`.

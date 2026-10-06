@@ -30,19 +30,27 @@ describe('VideoProcessingProducer (integration — real Redis)', () => {
     }).compile();
     producer = moduleRef.get(VideoProcessingProducer);
 
-    // Drain any pre-existing jobs from previous runs.
+    // Drain any pre-existing jobs AND events from previous runs.
     drainQueue = new Queue(VIDEO_PROCESSING_QUEUE_NAME, {
       connection: REDIS_CONNECTION,
     });
     await drainQueue.drain(true);
-    await drainQueue.clean(0, 0, 'completed');
-    await drainQueue.clean(0, 0, 'failed');
+    await drainQueue.clean(0, 1000, 'completed');
+    await drainQueue.clean(0, 1000, 'failed');
+    await drainQueue.clean(0, 1000, 'wait');
+    await drainQueue.clean(0, 1000, 'active');
+    await drainQueue.clean(0, 1000, 'delayed');
+    await drainQueue.obliterate({ force: true });
   });
 
   afterAll(async () => {
-    await drainQueue.drain(true);
+    await drainQueue.obliterate({ force: true }).catch(() => undefined);
     await drainQueue.close();
     await moduleRef.close();
+  });
+
+  beforeEach(async () => {
+    await drainQueue.obliterate({ force: true }).catch(() => undefined);
   });
 
   it('enqueues a job and a scoped worker on the same queue consumes it', async () => {

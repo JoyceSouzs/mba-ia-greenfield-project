@@ -1,5 +1,5 @@
 import { InjectQueue } from '@nestjs/bullmq';
-import { Inject, Injectable } from '@nestjs/common';
+import { Inject, Injectable, Logger } from '@nestjs/common';
 import type { ConfigType } from '@nestjs/config';
 import type { Queue } from 'bullmq';
 import queueConfig from '../config/queue.config';
@@ -11,6 +11,8 @@ import {
 
 @Injectable()
 export class VideoProcessingProducer {
+  private readonly logger = new Logger(VideoProcessingProducer.name);
+
   constructor(
     @InjectQueue(VIDEO_PROCESSING_QUEUE_NAME)
     private readonly queue: Queue<VideoProcessingJobData>,
@@ -31,6 +33,9 @@ export class VideoProcessingProducer {
     if (!job.id) {
       throw new Error('BullMQ did not return a job id');
     }
+    this.logger.log(
+      `Enqueued ${VIDEO_PROCESSING_JOB} job=${job.id} video=${data.videoId}`,
+    );
     return job.id;
   }
 }
