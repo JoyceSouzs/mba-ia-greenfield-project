@@ -1,7 +1,7 @@
 # phase-03-videos — Progress
 
 **Status:** in_progress
-**SIs:** 5/8 completed
+**SIs:** 6/8 completed
 
 ---
 
@@ -104,11 +104,23 @@
 
 ## SI-03.6 — Video Worker — Processing Pipeline
 
-**Status:** pending
+**Status:** completed
 
-**Tests:** _not yet run_
+**Tests:**
+- `src/videos/video-processing.service.spec.ts` — 4 unit tests: `getStatus` (hit + miss), `markReady` (parameterized SQL with jsonb cast on `metadata`, avoids SQL injection), `markFailed`.
+- `video-worker/src/video.processor.spec.ts` — 4 unit tests (fluent-ffmpeg mocked): happy path (headObject → signed GET → fetch → ffprobe → thumbnail → putObject → markReady), status-not-processing idempotent skip, intermediate failure (throws but does not markFailed), terminal failure (markFailed with reason).
+- `video-worker/src/worker.module.spec.ts` — 1 test confirming module composition.
+- `video-worker/src/video.processor.integration-spec.ts` — 2 end-to-end integration tests against real MinIO + real DB + real ffmpeg: happy path (3s MP4 fixture → status=ready, duration≈3s, metadata {width:320,height:240,codecName:'h264'}, thumbnail bytes in MinIO with content-type image/jpeg), terminal failure (missing raw → status=failed with reason). Must run in the `video-worker` container (has ffmpeg; the API container does not).
+- 11/11 green (9 unit + 2 integration).
 
-**Observations:** _none yet._
+**Observations:**
+- `VideoProcessingService` in `src/videos/`: shared between the API side (for future use) and the worker. Provides `getStatus`, `markReady`, `markFailed`. `markReady` uses raw parameterized SQL (`$1..$4`) with `::jsonb` cast because `Repository.update` cannot typecheck the jsonb column against `Record<string, unknown>`.
+- `VideoProcessor` extends `WorkerHost` (@nestjs/bullmq) and consumes `VIDEO_PROCESSING_QUEUE_NAME`. On each attempt: `headObject` → `signGetObjectUrl` → `fetch` → `writeFile` → `ffprobe` → thumbnail extraction via `fluent-ffmpeg.screenshots({ timestamps: ['50%'], size: '640x?' })` → `putObject` to `thumbnails` bucket → `markReady`. On failure: logs attempt vs total, calls `markFailed` only on the terminal attempt (`job.attemptsMade + 1 >= job.opts.attempts`). `finally` block cleans the tmpfs dir with error swallow allowed per `nestjs-services.md` (background-task cleanup, not request path).
+- `WorkerModule` is a Nest standalone application (`NestFactory.createApplicationContext`). It loads the same `ConfigModule`, `TypeOrmModule.forRootAsync` and infrastructure modules as the API — only the HTTP controllers are absent. `main.ts` boots the context; the BullMQ `Worker` starts automatically because `@Processor` is a provider.
+- **Jest config:** added `rootDir: '.'` + `roots: ['<rootDir>/src', '<rootDir>/video-worker']` to pick up specs in both trees. Integration run must happen inside `docker compose exec video-worker` because the API container intentionally lacks ffmpeg (TD-04: isolation is the whole point).
+- Dockerfile.dev of the worker already installs ffmpeg (SI-03.1); the integration test exercised the real binary end-to-end.
+- Fixture: `test/fixtures/sample.mp4` — 3-second 320×240 H.264 clip generated once via `ffmpeg -f lavfi -i testsrc=duration=3:size=320x240:rate=10 -c:v libx264 -shortest`. Committed as a static asset.
+- `--forceExit` is needed in all jest runs that boot BullMQ (the connection leaves open handles). Not a correctness issue; cleanup detail.
 
 ---
 

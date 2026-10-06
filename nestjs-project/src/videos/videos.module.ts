@@ -4,6 +4,7 @@ import { Channel } from '../channels/entities/channel.entity';
 import { QueueModule } from '../queue/queue.module';
 import { StorageModule } from '../storage/storage.module';
 import { Video } from './entities/video.entity';
+import { VideoProcessingService } from './video-processing.service';
 import { VideosController } from './videos.controller';
 import { VideosService } from './videos.service';
 
@@ -14,7 +15,7 @@ import { VideosService } from './videos.service';
     QueueModule,
   ],
   controllers: [VideosController],
-  providers: [VideosService],
-  exports: [TypeOrmModule, VideosService],
+  providers: [VideosService, VideoProcessingService],
+  exports: [TypeOrmModule, VideosService, VideoProcessingService],
 })
 export class VideosModule {}

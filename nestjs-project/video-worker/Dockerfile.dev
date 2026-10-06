@@ -6,4 +6,8 @@ WORKDIR /home/node/app
 
 USER node
 
+# Default command keeps the container alive; the user starts the worker
+# explicitly with:
+#   docker compose exec video-worker npx ts-node video-worker/src/main.ts
+# This mirrors the convention of the API container (CLAUDE.md).
 CMD [ "tail", "-f", "/dev/null" ]
