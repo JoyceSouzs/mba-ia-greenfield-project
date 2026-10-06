@@ -1,7 +1,7 @@
 # phase-03-videos — Progress
 
 **Status:** in_progress
-**SIs:** 6/8 completed
+**SIs:** 7/8 completed
 
 ---
 
@@ -126,11 +126,20 @@
 
 ## SI-03.7 — Playback and Download Endpoints
 
-**Status:** pending
+**Status:** completed
 
-**Tests:** _not yet run_
+**Tests:**
+- `src/videos/video-view.service.spec.ts` — 9 unit tests covering visibility rules (ready → anyone; non-ready → owner only; stranger gets 404 to hide status), signed URL emission for metadata/stream/download, Content-Disposition sanitization + extension picking, VideoNotReadyException branches.
+- `test/videos-playback.e2e-spec.ts` — 5 e2e tests: metadata happy path (anonymous), unknown slug → 404, **stream 307 → follows redirect to MinIO → `Range: bytes=0-1023` → `206 Partial Content` with `Content-Range` matching** (acceptance criterion fulfilled), download 307 with `response-content-disposition=attachment` + follow confirms `Content-Disposition: attachment; filename="…mp4"`, stream for unknown slug → 404 `VIDEO_NOT_FOUND`.
+- 14/14 green.
 
-**Observations:** _none yet._
+**Observations:**
+- New `VideoViewService` co-locates visibility (anonymous vs. owner), signed URL minting, and `Content-Disposition` composition. Keeps `VideosService` focused on write operations and the playback controller thin.
+- New `VideosPlaybackController` (3 endpoints, all `@Public()`): `GET /videos/:slug` metadata; `GET /videos/:slug/stream` → 307 redirect to presigned GET (15 min TTL, raw bucket); `GET /videos/:slug/download` → 307 redirect to presigned GET (1 h TTL, raw bucket) with `response-content-disposition=attachment; filename="<title>.<ext>"` baked in — filename sanitization strips quotes/newlines and truncates at 100 chars.
+- "Owner visibility while endpoint is `@Public()`" was the tricky bit. The global `JwtAuthGuard` short-circuits at `@Public()` and never populates `req.user`. New `tryExtractUserId` util reads the Authorization header lazily and verifies the Bearer with `JwtService.verifyAsync` — returns the `sub` on success, `null` on absence or failure. Caller passes it to the view service as the "callerUserId" for the ownership check.
+- Non-ready videos are hidden from strangers with `VIDEO_NOT_FOUND` (not `VIDEO_NOT_READY`) — avoids leaking status existence to probers.
+- `VideosModule` imports `AuthModule` to get `JwtModule.registerAsync` exported by auth.module.ts.
+- The e2e test validates **TD-06 end-to-end**: client calls our API `/stream` → gets 307 → follows to MinIO → `Range` header → MinIO answers `206 Partial Content`. This is the full "streaming without download" acceptance criterion from the Fase 03 brief.
 
 ---
 
