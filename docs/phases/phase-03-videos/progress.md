@@ -159,3 +159,20 @@
 - Root `CLAUDE.md`: Repository Structure now lists the new modules; Architecture section replaces the "TBD" message queue with the real stack (MinIO, Redis + BullMQ, Video Worker image).
 - Fixed cross-run isolation on `video-processing.producer.integration-spec.ts` via `queue.obliterate({ force: true })` in `beforeAll`/`beforeEach`/`afterAll` — prior runs could leave orphan jobs in Redis that polluted the "first job id" assertion.
 - Updated `videos.module.spec.ts` to boot the full `AppModule` (previously it tried to compile the standalone module without `AuthModule` dep).
+
+## Phase Closeout
+
+### Full suite results
+
+- `docker compose exec nestjs-api npm test -- --runInBand --forceExit`: **222 passed, 2 skipped** (`video-worker/src/video.processor.integration-spec.ts` auto-skips when the host container has no `ffmpeg` binary — guarded by `describeIfFfmpeg`). 38/39 suites green; the skipped one runs green inside `video-worker`.
+- `docker compose exec video-worker sh -c 'cd /home/node/app && npx jest --runInBand --forceExit video-worker/src/'`: **7 passed** (the 2 ffmpeg-gated tests included).
+- `docker compose exec nestjs-api npm run test:e2e -- --runInBand --forceExit`: **64 passed** (5 suites: app health, auth, swagger, videos upload, videos playback).
+- `docker compose exec nestjs-api npx tsc --noEmit`: **exit 0**.
+
+### Known debt
+
+- `docker compose exec nestjs-api npm run lint`: 147 errors + 40 warnings — **all from Phase 01/02 files** (specs with `jest.fn()`-based mocks triggering `no-unsafe-*` and `unbound-method`, pre-existing `any` cast in `channels.service.ts`). No file introduced by Phase 03 contributes a lint error. Fixing those is out of scope per the user decision at Phase 03 kickoff; it should be addressed as a dedicated "lint-debt-sweep" task.
+
+### Branch & PR
+
+- Work was done on `feature/phase-03-videos` (created from `dev` which was created from `main`). 13 commits (5 planning artifacts + 8 implementation SIs). Ready to open PR against `dev`.

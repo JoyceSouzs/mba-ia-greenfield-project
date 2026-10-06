@@ -1,6 +1,7 @@
 import { ConfigModule } from '@nestjs/config';
 import { Test, type TestingModule } from '@nestjs/testing';
 import { TypeOrmModule } from '@nestjs/typeorm';
+import { execSync } from 'node:child_process';
 import { readFile } from 'node:fs/promises';
 import * as path from 'node:path';
 import { DataSource, Repository } from 'typeorm';
@@ -31,7 +32,18 @@ const FIXTURE_PATH = path.join(
   'sample.mp4',
 );
 
-describe('VideoProcessor (integration — real DB + MinIO + ffmpeg)', () => {
+function hasFfmpeg(): boolean {
+  try {
+    execSync('ffprobe -version', { stdio: 'ignore' });
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+const describeIfFfmpeg = hasFfmpeg() ? describe : describe.skip;
+
+describeIfFfmpeg('VideoProcessor (integration — real DB + MinIO + ffmpeg)', () => {
   let moduleRef: TestingModule;
   let dataSource: DataSource;
   let storage: StorageService;
