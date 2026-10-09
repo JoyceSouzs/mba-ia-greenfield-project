@@ -190,7 +190,8 @@
 
 - `docker compose exec nestjs-api npm run lint`: 147 errors + 40 warnings — **all from Phase 01/02 files** (specs with `jest.fn()`-based mocks triggering `no-unsafe-*` and `unbound-method`, pre-existing `any` cast in `channels.service.ts`). No file introduced by Phase 03 contributes a lint error. Fixing those is out of scope per the user decision at Phase 03 kickoff; it should be addressed as a dedicated "lint-debt-sweep" task.
 - ~~**Mail templates missing in `dist`**~~ — **resolved:** `tsconfig.build.json` now excludes `video-worker/` (the worker runs via `ts-node`, never built), so `tsc` keeps `src/` as root and `dist/` mirrors it again (`dist/main.js`, `dist/mail/templates/*.hbs`). Including the worker had moved output to `dist/src/...` while assets stayed in `dist/mail/`, breaking `POST /auth/register` and `start:prod`. The crash itself comes from `@nestjs-modules/mailer`'s `HandlebarsAdapter`, which throws synchronously (`readFileSync`) inside a nodemailer plugin callback — outside the awaited promise, so `MailService` cannot catch it. Verified: register → 201, email in Mailpit, API stays up.
-- **`test:e2e` script lacks `--runInBand`:** `nestjs-project/CLAUDE.md` says it is "already configured", but `package.json` runs `jest --config ./test/jest-e2e.json` only; without the flag, 10 e2e tests fail from shared-DB contention. Pass `--runInBand` explicitly until fixed.
+- ~~**`test:e2e` script lacks `--runInBand`**~~ — **resolved:** `package.json` now runs `jest --config ./test/jest-e2e.json --runInBand`, matching what `nestjs-project/CLAUDE.md` documents. `npm run test:e2e` → 64/64 without passing the flag manually (previously 10 failures from shared-DB contention).
+- **`npm run lint` does not cover `video-worker/`:** the script globs `{src,apps,libs,test}`. Linting `video-worker/` manually adds 149 errors, all in `video.processor.integration-spec.ts`. Should be folded into the lint-debt-sweep task.
 
 ### Branch & PR
 
