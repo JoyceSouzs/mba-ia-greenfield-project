@@ -160,6 +160,23 @@
 - Fixed cross-run isolation on `video-processing.producer.integration-spec.ts` via `queue.obliterate({ force: true })` in `beforeAll`/`beforeEach`/`afterAll` — prior runs could leave orphan jobs in Redis that polluted the "first job id" assertion.
 - Updated `videos.module.spec.ts` to boot the full `AppModule` (previously it tried to compile the standalone module without `AuthModule` dep).
 
+## Review fix — Video Worker failed to boot (`MAILER_OPTIONS`)
+
+**Status:** completed
+
+**Problem (review comment):** upload reached MinIO and `complete` enqueued the job, but the worker never started: `WorkerModule` imported `VideosModule` → `AuthModule` → `MailModule`, and since the worker does not load `mailConfig`, Nest failed to resolve `MAILER_OPTIONS`. Videos stayed in `processing` forever. The SI-03.6 `worker.module.spec.ts` did not catch it because it assembled its own module list instead of compiling the real `WorkerModule`.
+
+**Fix:**
+- New `src/videos/video-processing.module.ts` (`forFeature([Video])` + `VideoProcessingService`) — the worker's only dependency on the videos domain. `VideosModule` no longer registers `VideoProcessingService` (the API never used it).
+- `WorkerModule` imports `VideoProcessingModule` instead of `VideosModule`. Supersedes the SI-03.6 note that the worker "loads the same modules as the API".
+- `WorkerModule` TypeORM config uses explicit `entities: [Video, Channel, User]` instead of `autoLoadEntities` — with only `forFeature([Video])` loaded, TypeORM failed with `Entity metadata for Video#channel was not found` (second latent bug surfaced by the real compilation test).
+
+**Tests:**
+- `worker.module.spec.ts` → `worker.module.integration-spec.ts` (it connects to Postgres/Redis): compiles the real `WorkerModule` and resolves `VideoProcessor`, `VideoProcessingService`, `StorageService`. Verified that it fails against the previous `WorkerModule` with the exact `MAILER_OPTIONS` error.
+- `videos.module.spec.ts` no longer expects `VideoProcessingService` inside `AppModule`.
+
+**Manual end-to-end validation:** worker started with `docker compose exec video-worker npx ts-node video-worker/src/main.ts` (`Video worker started`); real flow create → parts → presigned PUT to MinIO → `complete` (204) → status `ready` in ~2s with `duration_seconds=5` and `thumbnail_object_key=…/thumb.jpg`; `GET /videos/:slug` returns `thumbnailUrl`, which serves `image/jpeg` (200).
+
 ## Phase Closeout
 
 ### Full suite results
@@ -172,6 +189,8 @@
 ### Known debt
 
 - `docker compose exec nestjs-api npm run lint`: 147 errors + 40 warnings — **all from Phase 01/02 files** (specs with `jest.fn()`-based mocks triggering `no-unsafe-*` and `unbound-method`, pre-existing `any` cast in `channels.service.ts`). No file introduced by Phase 03 contributes a lint error. Fixing those is out of scope per the user decision at Phase 03 kickoff; it should be addressed as a dedicated "lint-debt-sweep" task.
+- **Mail templates missing in `dist` (found during the worker review fix):** since `video-worker/` is part of the build, `tsc` emits to `dist/src/...` but `nest-cli.json` assets still copy `.hbs` to `dist/mail/templates`. `POST /auth/register` under `start:dev` fails with `ENOENT … dist/src/mail/templates/confirmation.hbs`, and the unhandled rejection crashes the API process. Needs a dedicated bugfix task.
+- **`test:e2e` script lacks `--runInBand`:** `nestjs-project/CLAUDE.md` says it is "already configured", but `package.json` runs `jest --config ./test/jest-e2e.json` only; without the flag, 10 e2e tests fail from shared-DB contention. Pass `--runInBand` explicitly until fixed.
 
 ### Branch & PR
 

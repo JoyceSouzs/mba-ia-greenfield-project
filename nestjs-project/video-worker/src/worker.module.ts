@@ -1,13 +1,16 @@
 import { Module } from '@nestjs/common';
 import { ConfigModule, type ConfigType } from '@nestjs/config';
 import { TypeOrmModule } from '@nestjs/typeorm';
+import { Channel } from '../../src/channels/entities/channel.entity';
 import databaseConfig from '../../src/config/database.config';
 import { envValidationSchema } from '../../src/config/env.validation';
 import queueConfig from '../../src/config/queue.config';
 import storageConfig from '../../src/config/storage.config';
 import { QueueModule } from '../../src/queue/queue.module';
 import { StorageModule } from '../../src/storage/storage.module';
-import { VideosModule } from '../../src/videos/videos.module';
+import { User } from '../../src/users/entities/user.entity';
+import { Video } from '../../src/videos/entities/video.entity';
+import { VideoProcessingModule } from '../../src/videos/video-processing.module';
 import { VideoProcessor } from './video.processor';
 
 @Module({
@@ -28,13 +31,16 @@ import { VideoProcessor } from './video.processor';
         username: dbCfg.username,
         password: dbCfg.password,
         database: dbCfg.name,
-        autoLoadEntities: true,
+        // Explicit list instead of autoLoadEntities: the worker only imports
+        // VideoProcessingModule, but Video's relation graph (Video → Channel
+        // ↔ User) must be fully present for TypeORM to build metadata.
+        entities: [Video, Channel, User],
         synchronize: false,
       }),
     }),
     StorageModule,
     QueueModule,
-    VideosModule,
+    VideoProcessingModule,
   ],
   providers: [VideoProcessor],
 })

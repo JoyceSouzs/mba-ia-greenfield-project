@@ -173,10 +173,10 @@ Backend for video upload, processing, and playback. Lives under `src/videos/` wi
 
 ### Modules
 
-- `src/videos/`: entities (Video + status enum), DTOs, domain exceptions, two controllers (`VideosController` for upload lifecycle, `VideosPlaybackController` for public playback/download), two services (`VideosService` for write ops, `VideoViewService` for read + visibility), a `VideoProcessingService` shared with the worker, and a `slug.generator.ts` using `nanoid@^3.3.20` (CJS — see `docs/phases/phase-03-videos/library-refs.md` TD-07).
+- `src/videos/`: entities (Video + status enum), DTOs, domain exceptions, two controllers (`VideosController` for upload lifecycle, `VideosPlaybackController` for public playback/download), two services (`VideosService` for write ops, `VideoViewService` for read + visibility), a `VideoProcessingModule` (only `VideoProcessingService` + `forFeature([Video])`) that is the worker's sole dependency on the videos domain, and a `slug.generator.ts` using `nanoid@^3.3.20` (CJS — see `docs/phases/phase-03-videos/library-refs.md` TD-07).
 - `src/storage/`: `StorageService` is the only module that imports from `@aws-sdk/*`. Exposes a narrow typed API (`createMultipartUpload`, `signUploadPartUrls`, `completeMultipartUpload`, `abortMultipartUpload`, `signGetObjectUrl`, `headObject`, `putObject`).
 - `src/queue/`: `BullModule` wiring + `VideoProcessingProducer` (producer side only; the worker side is in `video-worker/`).
-- `video-worker/src/`: `WorkerModule` is a Nest standalone application loading the same ConfigModule/TypeORM/StorageModule/QueueModule as the API, plus the `VideoProcessor` provider. `main.ts` bootstraps `NestFactory.createApplicationContext`.
+- `video-worker/src/`: `WorkerModule` is a Nest standalone application loading ConfigModule (database/storage/queue configs only), TypeORM (explicit `entities: [Video, Channel, User]` — Video's relation graph), StorageModule, QueueModule and `VideoProcessingModule`, plus the `VideoProcessor` provider. It must **not** import `VideosModule`: that pulls `AuthModule` → `MailModule`, whose `MAILER_OPTIONS` needs `mailConfig`, which the worker does not load. `worker.module.integration-spec.ts` compiles the real `WorkerModule` to catch this. `main.ts` bootstraps `NestFactory.createApplicationContext`.
 
 ### Status machine
 
