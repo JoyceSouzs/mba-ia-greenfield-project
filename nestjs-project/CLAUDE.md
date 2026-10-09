@@ -142,6 +142,8 @@ Whenever possible, prefer storing only the bare address in `.env` and composing 
 
 `tsc` (and therefore `nest build`) only emits compiled `.ts` files to `dist/`. Any non-TypeScript runtime asset — Handlebars templates (`.hbs`), JSON fixtures, static config files, etc. — must be declared in `nest-cli.json` under `compilerOptions.assets` (with `watchAssets: true` for dev). Without that, the file exists in `src/` but is missing in `dist/` and runtime fails only after build.
 
+The API build must keep `src/` as the TypeScript root so `dist/` mirrors `src/` (`dist/main.js`, `dist/mail/templates/`). `tsconfig.build.json` therefore excludes `video-worker/` (the worker runs via `ts-node` and is never built). If any directory outside `src/` gets compiled, `tsc` moves the output to `dist/src/...` while assets stay at `dist/mail/...` — templates are then not found at runtime and `start:prod` (`node dist/main`) breaks.
+
 ## Architecture
 
 NestJS with standard module structure. Source lives in `src/`, compiled output in `dist/`.
